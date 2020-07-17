@@ -38,6 +38,7 @@ typedef long (*ijmp_t)(void);
 
 typedef struct
 {
+    /* Maintains types of flags associated to fd. */
 	char fd_type[1024];
 	long lock;
 

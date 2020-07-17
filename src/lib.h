@@ -59,6 +59,7 @@ static inline int between(const char *start, char *end, char *addr)
 	       ((unsigned long)addr <= (unsigned long)end);
 }
 
+/* Used for code mappings */
 static inline int contains(const char *addr1, unsigned long len1, const char *addr2)
 {
 	return overlap(addr1, len1, addr2, 1);

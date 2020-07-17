@@ -30,6 +30,7 @@
 
 static int try_load_script(elf_prog_t *prog, long bailout)
 {
+    debug("Trying to load script"); 
 	int fd, err, size, i, last = BINPRM_BUF_SIZE-2;
 	char buf[BINPRM_BUF_SIZE]; buf[BINPRM_BUF_SIZE-1] = '\0';
 	char *interp = NULL, *interp_arg = NULL, *script_name;

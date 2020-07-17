@@ -850,8 +850,9 @@ static int generate_jcc(char *dest, char *jmp_addr, int cond, trans_t *trans,
 
 int generate_ill(char *dest, trans_t *trans)
 {
-	dest[0] = '\x0F';
-	dest[1] = '\x0B';
+    /* Add UD2 */
+	dest[0] = 0x0F;
+	dest[1] = 0x0B;
 	*trans = (trans_t){ .len=2 };
 	return 2;
 }
@@ -1076,9 +1077,12 @@ static void translate_control(char *dest, instr_t *instr, trans_t *trans,
 		trans->jmp_addr = (char *)((long)trans->jmp_addr & 0xffffL);
 }
 
+int undef_c = 0;
+
 void translate_op(char *dest, instr_t *instr, trans_t *trans,
                   char *map, unsigned long map_len)
 {
+
 	int action = jit_action[instr->op];
 
 	if ( (action & CONTROL_MASK) == CONTROL )
@@ -1092,9 +1096,14 @@ void translate_op(char *dest, instr_t *instr, trans_t *trans,
 		copy_instr(dest, instr, trans);
 	else if (action == CONDITIONAL_MOVE)
 		generate_cmov(dest, instr, trans);
-	else if ( (action == UNDEFINED_INSTRUCTION) || (action == JOIN) )
-		generate_ill(dest, trans);
-	else if (action == INT)
+	else if ( (action == UNDEFINED_INSTRUCTION) || (action == JOIN) ){
+        if (action == UNDEFINED_INSTRUCTION){
+            undef_c++;
+        	debug("Opcode: %x", instr->op);
+            debug("UNDEF FOUND! %d", undef_c);
+        }
+        generate_ill(dest, trans);
+    }else if (action == INT)
 	{
 		if (instr->addr[1] == '\x80')
 			generate_int80(dest, instr, trans);

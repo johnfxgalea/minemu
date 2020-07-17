@@ -109,7 +109,10 @@ static long get_stack_random_shift(long *auxv)
 
 static int alloc_user_stack(elf_prog_t *prog, int prot)
 {
-	long err = do_mmap2(prog->task_size-prog->stack_size, prog->stack_size,prot,
+	unsigned long addr = prog->task_size-prog->stack_size;
+
+	debug("Allocated user stack at %ul", addr);
+	long err = do_mmap2(addr, prog->stack_size,prot,
 	                    MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS, -1, 0);
 
 	if (err & PG_MASK)
@@ -135,6 +138,7 @@ static void init_user_stack(elf_prog_t *prog, int prot)
 	sp -= sizeof(long);
 	sp = prog->filename = stack_push_string(sp, prog->filename);
 
+	/* Taint arguments and environment variables. They are places above the stack. */
 	char *untrusted_data_end=sp;
 	sp = stack_push_strings(sp, tmp_envp, prog->envp);
 	sp = stack_push_strings(sp, tmp_argv, prog->argv);
@@ -238,9 +242,18 @@ static int read_elf_header(int fd, Elf32_Ehdr *hdr)
 
 static int find_interp_name(elf_bin_t *bin, char *buf, unsigned long max_size)
 {
+    debug("%s: Trying to find program interpreter in elf headers", __FILE__);
+    /* Search for program interpreter in program header. Note, there
+     * can only be one program header element for an interpreter.
+     */
 	long i;
 	Elf32_Phdr *p;
 
+    /* e_phnum not to be confused with e_phentsize. The former denotes
+     * the number of entries in the program header table, while the
+     * latter specifies the size in bytes of one entry (all entries
+     * are the same size) A program interpreter is optional.
+     */
 	for (i=0; i<bin->hdr.e_phnum; i++) 
 	{
 		p = &bin->phdr[i];
@@ -250,6 +263,7 @@ static int find_interp_name(elf_bin_t *bin, char *buf, unsigned long max_size)
 			if ( (p->p_filesz > max_size) || (p->p_filesz < 2) ) 
 				return -ENOEXEC;
 
+			/* Read the file name of the interpreter to out buffer. */
 			if ( read_at(bin->fd, p->p_offset, buf,
 			             p->p_filesz) != (long)p->p_filesz )
 				return -EIO;
@@ -257,15 +271,19 @@ static int find_interp_name(elf_bin_t *bin, char *buf, unsigned long max_size)
 			if ( buf[p->p_filesz-1] != '\0' )
 				return -ENOEXEC;
 
+            debug("load_elf.c: Program Interpreter found!");
 			return 1;
 		}
 	}
 
+	/* Program Interpreter not found. */
+    debug("%s: Program Interpreter not found!", __FILE__);
 	return 0;
 }
 
 int open_elf(const char *filename, elf_bin_t *bin)
 {
+    debug("load_elf.c: Opening elf %s", filename);
 	int err;
 
 	bin->fd = -1;
@@ -317,8 +335,12 @@ static unsigned long set_brk(elf_bin_t *bin)
 	return (new_brk == set_brk_min(new_brk)) ? 0 : -1;
 }
 
+/* Returns the protections of the flag. */ 
 static long get_stack_prot(elf_bin_t *bin)
 {
+    /* TODO:  The absense of this header indicates that the
+     * stack will be executable. Fix BUG.
+     */
 	int prot = PROT_READ|PROT_WRITE, i;
 
 	for (i=0; i<bin->hdr.e_phnum; i++) 
@@ -421,7 +443,9 @@ static long mmap_binary(elf_bin_t *elf, int is_interp)
 	if ( !is_interp && !elf->base )
 		set_brk(elf); /* do this before mapping, memory gets scrubbed */
 
+	/* Map program elements */
 	for (i=0; i<elf->hdr.e_phnum; i++) 
+		/* Only for loadable program segment  */
 		if ( (elf->phdr[i].p_type == PT_LOAD) &&
 		     ((ret=mmap_prog_section(elf, &elf->phdr[i])) & PG_MASK) )
 			return ret;
@@ -441,6 +465,7 @@ static int try_load_elf(elf_prog_t *prog, long bailout)
 	Elf32_Phdr phdr_bin_tmp[bin->hdr.e_phnum];
 	bin->phdr = phdr_bin_tmp; /* point to mmapped region later if any */
 
+	/* Load program headers. */
 	if (read_at(bin->fd, bin->hdr.e_phoff, bin->phdr,
 	            sizeof(*bin->phdr)*bin->hdr.e_phnum) !=
 	      (long)sizeof(*bin->phdr)*bin->hdr.e_phnum)
@@ -460,6 +485,9 @@ static int try_load_elf(elf_prog_t *prog, long bailout)
 
 	if ( has_interp )
 	{
+		/* Load program headers of interpreter program. */
+	    debug("%s: Loading the interpreter's program header. %s", __FILE__, i_filename);
+
 		interp->phdr = phdr_interp_tmp; /* point to mmapped region later */
 
 		if (read_at(interp->fd, interp->hdr.e_phoff, interp->phdr,
@@ -468,10 +496,13 @@ static int try_load_elf(elf_prog_t *prog, long bailout)
 			return -EIO;
 	}
 
-	/* point of no return */
+	/* If we are just checking if we can load the elf, we can return from the
+     * function now.
+     */
 	if (bailout)
 		return 0;
 
+    /* Time to create and set up the main stack. */
 	int stack_prot = get_stack_prot(bin);
 	err = alloc_user_stack(prog, stack_prot);
 
@@ -482,7 +513,6 @@ static int try_load_elf(elf_prog_t *prog, long bailout)
 		raise(SIGKILL);
 
 	/* set up stack */
-
 	bin->phdr = mapped_phdr(bin);
 
 	if ( has_interp )
@@ -493,6 +523,7 @@ static int try_load_elf(elf_prog_t *prog, long bailout)
 	if (err & PG_MASK)
     	raise(SIGKILL);
 
+	/* Set up entry point depending on whether interpreter is set up. */
 	if (has_interp)
 		prog->entry = (void *)(interp->base + interp->hdr.e_entry);
 	else

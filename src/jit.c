@@ -275,7 +275,7 @@ static char *jit_chunk_lookup_addr(jit_chunk_t *hdr, char *addr)
 
 	/* Stage 1 lookup */
 	jit_lookup_t *lookup = (jit_lookup_t *)((long)hdr+hdr->lookup_off);
-	jit_lookup_t *frame_entry = &lookup[ ((long)addr-(long)hdr->addr) >> FRAME_SHIFT ];
+	jit_lookup_t *frame_entry = &lookup[ ((long)addr-(long)hdr->addr) >> FRAME_SHIFT  ];
 
 	/* get the instruction-per-instruction size array start for this frame */
 	size_pair_t *sizes = (size_pair_t *)((long)hdr+frame_entry->tbl_off);
@@ -317,13 +317,18 @@ static char *jit_map_lookup_addr(code_map_t *map, char *addr)
 		return NULL;
 
 	/* go through all chunks until we find a mapping */
+    /* Most likely we are here due to a cache miss (which was
+     * done by a hash-lookup in inline code).
+     */
 	while (off < map->jit_len)
 	{
 		jit_chunk_t *hdr = (jit_chunk_t *)&map->jit_addr[off];
 
+        /* If found (i.e., not NULL), return. */
 		if ( (jit_addr = jit_chunk_lookup_addr(hdr, addr)) )
 			return jit_addr;
 
+        /* On to the next chunk. */
 		off += hdr->chunk_len;
 	}
 
@@ -332,6 +337,7 @@ static char *jit_map_lookup_addr(code_map_t *map, char *addr)
 
 char *jit_lookup_addr(char *addr)
 {
+    /* Often called via inline code upon cache miss. */
 	code_map_t *map = find_code_map(addr);
 	char *jit_addr = NULL;
 
@@ -674,6 +680,7 @@ char *jit(char *addr)
 	if (jit_addr == NULL)
 		die("jit failed");
 
+    debug("%X --> %X",addr, jit_addr);
 	return jit_addr;
 }
 

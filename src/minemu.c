@@ -40,6 +40,7 @@
 /* not called main() to avoid warnings about extra parameters :-(  */
 int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 {
+    debug("Hello there!");
 	unsigned long pers = sys_personality(0xffffffff);
 	char **argv = orig_argv;
 
@@ -56,6 +57,8 @@ int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 	if ( (progname == NULL) && (argv[0][0] == '/') )
 		progname = argv[0];
 
+    debug("Program name is NULL", progname == NULL);
+
 	init_minemu_mem(auxv, envp);
 	init_shield(TAINT_END);
 	sigwrap_init();
@@ -71,10 +74,13 @@ int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 		.stack_size = USER_STACK_SIZE,
 	};
 
-	int ret;
 
+    debug ("Attempting to load binary.");
+
+	int ret;
 	if (progname)
 	{
+        debug("Progname not null, trying %s", progname);
 		prog.filename = progname;
 		ret = load_binary(&prog);
 	}
@@ -87,6 +93,7 @@ int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 		else
 			path = getenve("PATH", envp);
 
+        /* Iterate over path in attempt to find the executable binary. */
 		while ( (ret < 0) && (path != NULL) )
 		{
 			long len;
@@ -108,6 +115,7 @@ int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 				strcat(progname_buf, argv[0]);
 				prog.filename = progname_buf;
 				int ret_tmp = load_binary(&prog);
+                debug("Progname is null, trying %s %d", progname_buf, ret_tmp);
 				if ( (ret != -EACCES) || (ret_tmp >= 0) )
 					ret = ret_tmp;
 			}
@@ -129,6 +137,7 @@ int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 	else
 		process_name = prog.filename;
 
+    debug("Process name: %s", process_name);
 	sys_prctl(PR_SET_NAME, process_name, 0,0,0);
 
 	stack_bottom = (unsigned long)prog.sp;
@@ -140,7 +149,10 @@ int minemu_main(int argc, char *orig_argv[], char *envp[], long auxv[])
 	if (sysinfo)
 		set_aux(prog.auxv, AT_SYSINFO, (sysinfo & 0xfff) + vdso);
 
+    debug("Emu starting!");
 	emu_start(prog.entry, prog.sp);
+
+    debug("I shouldn't be here!");
 
 	sys_exit(1);
 	return 1;

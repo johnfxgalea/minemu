@@ -294,6 +294,9 @@ char *getenve(const char *name, char **environment)
 
 long read_at(int fd, off_t off, void *buf, size_t size)
 {
+    /* Reads from a file at a particilar position. Basically,
+     * the function uses lseek.
+     */
 	int ret = sys_lseek(fd, off, SEEK_SET);
 
 	if (ret < 0)

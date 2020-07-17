@@ -34,15 +34,18 @@ int can_load_binary(elf_prog_t *prog)
 	if (err)
 		err = can_load_script(prog);
 
+    debug("exec.c: Checking if can load binary %d", err);
 	return err;
 }
 
 int load_binary(elf_prog_t *prog)
 {
+    debug("exec.c: calling load_elf");
 	if ( load_elf(prog) == 0 )
 		return 0;
-	else
-		return load_script(prog);
+
+    debug("exec.c: Loading elf failed, trying script");
+	return load_script(prog);
 }
 
 static char *exec_argv[65536+64];
@@ -50,6 +53,7 @@ static long argv_lock = 0;
 
 long user_execve(char *filename, char *argv[], char *envp[])
 {
+    debug("exec.c: user_execve syscall encountered for %s", filename);
 	unsigned long count = strings_count(argv);
 	if ( count + option_args_count() + 2 > sizeof(exec_argv)/sizeof(char*) )
 		return -E2BIG;

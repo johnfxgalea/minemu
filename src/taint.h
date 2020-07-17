@@ -25,12 +25,14 @@
 
 #ifndef __ASSEMBLER__
 
+/* Values to set the taint flag. Taint is on by default. */
 enum
 {
 	TAINT_ON,
 	TAINT_OFF,
 };
 
+/* Different taint flags for different sources. */
 enum
 {
 	TAINT_CLEAR = 0x00,
@@ -62,6 +64,7 @@ enum
 
 #define TAINT_LONG(a) (0x01010101*(a))
 
+/* Denotes whether tainting is enabled. Can be set via options. */
 extern int taint_flag;
 
 extern char *trusted_dirs_default;
@@ -73,6 +76,7 @@ void taint_or(void *mem, unsigned long size, int type);
 void taint_and(void *mem, unsigned long size, int type);
 void do_taint(long ret, long call, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6);
 
+/* These are to access the shadow maps of registers. */
 void get_xmm5(unsigned char *xmm5);
 void get_xmm6(unsigned char *xmm6);
 void get_xmm7(unsigned char *xmm7);

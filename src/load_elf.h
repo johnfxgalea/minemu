@@ -19,6 +19,7 @@
 #ifndef LOAD_ELF_H
 #define LOAD_ELF_H
 
+/* Makes use of elf.h */
 #include <elf.h>
 
 typedef struct
@@ -27,21 +28,21 @@ typedef struct
 	Elf32_Phdr *phdr;
 	unsigned long base, bss, brk;
 	int fd;
-
 } elf_bin_t;
 
+
+/* Constructed to pass to emu_start. */
 typedef struct
 {
 	char *filename;
 	char **argv, **envp;
 	long *auxv;
 	unsigned long task_size, stack_size;
-	void *entry;
-	long *sp;
+	void *entry; /* starting point */
+	long *sp; /* Stack pointer */
 
 	elf_bin_t bin;
 	elf_bin_t interp;
-
 } elf_prog_t;
 
 int load_elf(elf_prog_t *prog);

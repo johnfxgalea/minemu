@@ -213,6 +213,7 @@ static void dump_on_error(int sig, struct sigcontext *context)
 
 static void sigwrap_handler(int sig, siginfo_t *info, void *_)
 {
+    debug("In sigwrap!");
 	thread_ctx_t *local_ctx = get_thread_ctx();
 	long *return_stackp = (long *)(((long)&sig)-4);
 	struct kernel_rt_sigframe *rt_sigframe = (struct kernel_rt_sigframe *) return_stackp;

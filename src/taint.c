@@ -43,6 +43,9 @@ char *trusted_dirs_default = "/bin:/sbin:/lib:/lib32:"
 char *trusted_dirs = NULL;
 static char trusted_dirs_buf[PATH_MAX];
 
+/* Special flags assigned to fd. Flags are maintained
+ * in thread local storage in fd_type.
+ */
 enum
 {
 	FD_UNKNOWN = 0,
@@ -108,6 +111,7 @@ static int is_trusted_file(int fd)
 
 	path[ret] = 0;
 
+    debug("Checking if path is trusted %s", path);
 	return in_dirlist(path, trusted_dirs);
 }
 
@@ -116,6 +120,7 @@ static int is_trusted_file(int fd)
 
 static int taint_val(int fd)
 {
+    debug("Getting taint value of fd %d\n", fd);
 	char *fd_type = get_thread_ctx()->files->fd_type;
 
 	if ( (fd > 1023) || (fd < 0) )
@@ -141,9 +146,12 @@ static int taint_val(int fd)
 	if (fd_type[fd] == FD_SOCKET)
 		return TAINT_SOCKET;
 
-	if (fd_type[fd] == FD_UNTRUSTED_FILE)
+	if (fd_type[fd] == FD_UNTRUSTED_FILE){
+        debug("\t untrusted file, returning taint mark.");
 		return TAINT_FILE;
+    }
 
+    debug("\t return clear taint");
 	return TAINT_CLEAR;
 }
 
@@ -178,12 +186,18 @@ unsigned long get_reg_taint(int reg)
 		die("set_reg_taint: bad register number");
 
 	long xmm[4];
+    /* First 4 shadow bytes of GPRs are stored in xmm6, while
+     * the shadow bytes of the other four registers are stored
+     * in xmm7.
+     */
 	if (reg > 3)
 		get_xmm6((unsigned char *)xmm);
 	else
 		get_xmm7((unsigned char *)xmm);
 
-	return xmm[reg&3];
+	long val =xmm[reg&3];
+    debug("Return reg taint %lu", val);
+    return val;
 }
 
 void set_reg_taint(int reg, unsigned long val)
@@ -219,11 +233,14 @@ static void taint_iov(struct iovec *iov, int iocnt, unsigned long size, int type
 	}
 }
 
+
+/* Called by syscall handler. */
 void do_taint(long ret, long call, long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 {
 	if (ret < 0)
 		return;
 
+    debug("Doing taint for syscall %d", (int) call);
 	switch (call)
 	{
 		case __NR_read:
@@ -235,7 +252,7 @@ void do_taint(long ret, long call, long arg1, long arg2, long arg3, long arg4, l
 		case __NR_open:
 		case __NR_creat:
 		case __NR_openat:
-			set_fd(ret, FD_FILE);
+            set_fd(ret, FD_FILE);
 
 			if (strcmp((char *)(call == __NR_openat ? arg2 : arg1), "/proc/self/stat") == 0)
 			{
@@ -245,10 +262,10 @@ void do_taint(long ret, long call, long arg1, long arg2, long arg3, long arg4, l
 			return;
 		case __NR_dup:
 		case __NR_dup2:
-			set_fd( ret, get_thread_ctx()->files->fd_type[arg1]);
+            set_fd( ret, get_thread_ctx()->files->fd_type[arg1]);
 			return;
 		case __NR_pipe:
-			set_fd( ((long *)arg1)[0], FD_SOCKET);
+            set_fd( ((long *)arg1)[0], FD_SOCKET);
 			set_fd( ((long *)arg1)[1], FD_SOCKET);
 			return;
 		case __NR_socketcall:

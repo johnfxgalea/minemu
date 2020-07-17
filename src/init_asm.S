@@ -15,6 +15,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+/* Mark as entry point */
+
 .text
 .global start
 .type start, @function

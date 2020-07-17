@@ -34,6 +34,7 @@
 #include "taint_dump.h"
 #include "threads.h"
 
+/* Main dispatcher for handling syscalls. */
 long syscall_emu(long call, long arg1, long arg2, long arg3,
                             long arg4, long arg5, long arg6)
 {
@@ -74,6 +75,7 @@ long syscall_emu(long call, long arg1, long arg2, long arg3,
 		case __NR_socketcall:
 			ret = syscall_intr(call,arg1,arg2,arg3,arg4,arg5,arg6);
 
+            /* Trigger taint introudction. On by default. */
 			if ( taint_flag == TAINT_ON )
 				do_taint(ret,call,arg1,arg2,arg3,arg4,arg5,arg6);
 
